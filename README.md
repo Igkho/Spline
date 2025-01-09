@@ -1,15 +1,29 @@
 Spline
 =========
 
-Library for manipulating 2D parametric B-splines.
+C++/CUDA library for manipulating 2D parametric B-splines.
 
 ## Features
 
 * Creation splines from a vector of points
 * Creation of spiral-like splines
 * Creation of ellipses
-* Finding intersection points of two splines with an accuracy of 1e-10
-* Finding the closest points of two splines with an accuracy 1e-10
+* Finding intersection points of two curves (splines or ellipses) with an accuracy of 1e-9 using Newton-Raphson optimization algorithm
+* Finding the closest points of two curves (splines or ellipses) with an accuracy 1e-9 using RMSProp optimization or BruteForce search algorithms
+* C++/CUDA and C++/OMP algorithms implementation
+
+## Speed estimation
+
+A high computation load example of a spline and an ellipse closest points finding:
+
+    RMSProp CPU	~ 3300 us **
+    BruteForce CPU	~ 2600 us **
+    BruteForce CUDA	~ 790 us ***
+
+** with Intel i5-13600KF
+ 
+*** with NVIDIA GeForce RTX 3060 Ti
+
 
 ## Building
 
@@ -28,7 +42,7 @@ Windows:
 * specify the source code and binary directories;
 * press Configure button, set up the Generator settings (i.e. select the MSVC version);
 * press Generate button;
-* open ALL_BUILD.vcxproj in MSVC and build the solution;
+* press Open project button to open solution in MSVC and build the solution;
 
 Executables:
 
@@ -36,11 +50,15 @@ Executables:
 * SplineTests - unit tests of the library
 * SplineExample - generates splines intersection and closest points finding examples
 
+Documentation:
+
+doxygen html documentation is generated in docs/html
 
 Dependencies:
 * the library depends on Eigen (fetched by Cmake)
 * tests depend on GoogleTest (fetched by Cmake)
 * examples depend on OpenCV (to run the executable the OpenCV libraries should be on the search path)
+* documentation building depends on Doxygen and GraphViz
 
 Examples
 --------

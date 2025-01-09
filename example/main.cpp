@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <array>
 #include "Spline.h"
 #include "opencv2/opencv.hpp"
 #include <optional>
@@ -13,8 +14,9 @@ namespace fs = std::filesystem;
 constexpr size_t TOTAL_DRAW_POINTS_COUNT = 50;
 const cv::Scalar DEFAULT_CURVE_COLOR = cv::Scalar(0xBF, 0x43, 0x1A);
 
+template <class Curve>
 int DrawCurve(cv::Mat &img,
-              const spline::BasicCurve<double> &curve,
+              spline::IBaseCurve<double, Curve> &curve,
               int scale,
               int shiftx,
               int shifty,
@@ -23,26 +25,27 @@ int DrawCurve(cv::Mat &img,
     std::optional<std::vector<double>> last_point;
     for (size_t i = 0; i <= total_count; ++i) {
         double t = (double)i / total_count;
-        auto point = curve(t);
-        point[0] *= scale;
-        point[1] *= scale;
-        point[0] += shiftx;
-        point[1] += shifty;
+        auto p = curve(t);
+        p[0] *= scale;
+        p[1] *= scale;
+        p[0] += shiftx;
+        p[1] += shifty;
         if (last_point.has_value()) {
             cv::line(img, cv::Point(last_point.value()[0], last_point.value()[1]),
-                     cv::Point(point[0], point[1]),
+                     cv::Point(p[0], p[1]),
                      color);
         }
-        last_point = point;
+        last_point = {p[0], p[1]};
     }
     return 0;
 }
 
+template <class Curve0, class Curve1>
 void DrawPoints(cv::Mat &img,
                 const std::vector<std::vector<double>> &points,
-                const spline::BasicCurve<double> &curve0,
-                const spline::BasicCurve<double> &curve1,
-                int scale, int shiftx, int shifty, float csize = 3) {
+                spline::IBaseCurve<double, Curve0> &curve0,
+                spline::IBaseCurve<double, Curve1> &curve1,
+                int scale, int shiftx, int shifty, double csize = 3) {
     for (const auto &p : points) {
         auto cp0 = curve0(p[0]);
         auto cp1 = curve1(p[1]);
@@ -80,12 +83,13 @@ void IntersectSpirals(std::vector<cv::Mat> &images) {
             ref_points1.push_back({std::cos(arg) * radius - 50 - shift, std::sin(arg) * radius});
             ref_points2.push_back({std::cos(arg) * radius + 50 + shift, std::sin(arg) * radius});
         }
-        spline::SplineD<double, 3> spline1(ref_points1);
-        spline::SplineD<double, 3> spline2(ref_points2);
-        DrawCurve(images[i], spline1, 1, 450, 260, DEFAULT_CURVE_COLOR, 1000);
-        DrawCurve(images[i], spline2, 1, 450, 260, DEFAULT_CURVE_COLOR, 1000);
-        std::vector<std::vector<double>> points = spline1.Intersect(spline2);
-        DrawPoints(images[i], points, spline1, spline2, 1, 450, 260);
+        spline::SplineD<double, 3> sp1(ref_points1);
+        spline::SplineD<double, 3> sp2(ref_points2);
+        DrawCurve(images[i], sp1, 1, 450, 260, DEFAULT_CURVE_COLOR, 1000);
+        DrawCurve(images[i], sp2, 1, 450, 260, DEFAULT_CURVE_COLOR, 1000);
+        std::vector<std::vector<double>> points =
+            spline::Intersector<double, decltype(sp1), decltype(sp2)>(sp1, sp2).Intersect();
+        DrawPoints(images[i], points, sp1, sp2, 1, 450, 260);
     }
 }
 
@@ -96,12 +100,13 @@ void IntersectTwoSplinesTouch(std::vector<cv::Mat> &images) {
                                                      {9 + shift, 11}, {13 + shift, 14}, {17 + shift, 17}};
         std::vector<std::vector<double>> ref_points2{{-1 - shift, 0}, {-5 - shift, 3}, {-8 - shift, 7},
                                                      {-11 - shift, 11}, {-15 - shift, 14}, {-19 - shift, 17}};
-        spline::SplineD<double, 3> spline1(ref_points1);
-        spline::SplineD<double, 3> spline2(ref_points2);
-        DrawCurve(images[i], spline1, 20, 450, 100);
-        DrawCurve(images[i], spline2, 20, 450, 100);
-        std::vector<std::vector<double>> points = spline1.Intersect(spline2);
-        DrawPoints(images[i], points, spline1, spline2, 20, 450, 100, 0.2);
+        spline::SplineD<double, 3> sp1(ref_points1);
+        spline::SplineD<double, 3> sp2(ref_points2);
+        DrawCurve(images[i], sp1, 20, 450, 100);
+        DrawCurve(images[i], sp2, 20, 450, 100);
+        std::vector<std::vector<double>> points =
+            spline::Intersector<double, decltype(sp1), decltype(sp2)>(sp1, sp2).Intersect();
+        DrawPoints(images[i], points, sp1, sp2, 20, 450, 100, 0.2);
     }
 }
 
@@ -112,12 +117,13 @@ void IntersectTwoSplinesMultipoint(std::vector<cv::Mat> &images) {
                                                      {1 + shift, 11}, {-1 + shift, 14}, {1 + shift, 17}, {-1 + shift, 20}};
         std::vector<std::vector<double>> ref_points2{{0 - shift, 0}, {-2 - shift, 3}, {0 - shift, 7},
                                                      {-2 - shift, 11}, {-0 - shift, 14}, {-2 - shift, 17}, {0 - shift, 20}};
-        spline::SplineD<double, 3> spline1(ref_points1);
-        spline::SplineD<double, 3> spline2(ref_points2);
-        DrawCurve(images[i], spline1, 20, 450, 50);
-        DrawCurve(images[i], spline2, 20, 450, 50);
-        std::vector<std::vector<double>> points = spline1.Intersect(spline2);
-        DrawPoints(images[i], points, spline1, spline2, 20, 450, 50, 0.2);
+        spline::SplineD<double, 3> sp1(ref_points1);
+        spline::SplineD<double, 3> sp2(ref_points2);
+        DrawCurve(images[i], sp1, 20, 450, 50);
+        DrawCurve(images[i], sp2, 20, 450, 50);
+        std::vector<std::vector<double>> points =
+            spline::Intersector<double, decltype(sp1), decltype(sp2)>(sp1, sp2).Intersect();
+        DrawPoints(images[i], points, sp1, sp2, 20, 450, 50, 0.2);
     }
 }
 
@@ -126,12 +132,13 @@ void IntersectSplineEllipse(std::vector<cv::Mat> &images) {
         const double shift = i * 0.1;
         std::vector<std::vector<double>> ref_points{{0 + shift, 0}, {4 + shift, 3}, {7 + shift, 7}, {10 + shift, 11},
                                                     {14 + shift, 14}, {18 + shift, 17}};
-        spline::SplineD<double, 3> spline(ref_points);
-        spline::Ellipse<double> ellipse({12, 2.5}, {0 - shift, 5});
-        DrawCurve(images[i], spline, 20, 450, 50);
-        DrawCurve(images[i], ellipse, 20, 450, 50);
-        std::vector<std::vector<double>> points = spline.Intersect(ellipse);
-        DrawPoints(images[i], points, spline, ellipse, 20, 450, 50, 0.2);
+        spline::SplineD<double, 3> sp(ref_points);
+        spline::Ellipse<double> el({12, 2.5}, {0 - shift, 5});
+        DrawCurve(images[i], sp, 20, 450, 50);
+        DrawCurve(images[i], el, 20, 450, 50);
+        std::vector<std::vector<double>> points =
+            spline::Intersector<double, decltype(el), decltype(sp)>(el, sp).Intersect();
+        DrawPoints(images[i], points, el, sp, 20, 450, 50, 0.2);
     }
 }
 
@@ -142,12 +149,13 @@ void ClosestTwoSplines(std::vector<cv::Mat> &images) {
                                                      {13 + shift, 17}, {17 + shift, 20}};
         std::vector<std::vector<double>> ref_points2{{-8 - shift, 3}, {-4 - shift, 6}, {-1 - shift, 10}, {2 - shift, 14},
                                                      {6 - shift, 17}, {10 - shift, 20}};
-        spline::SplineD<double, 3> spline1(ref_points1);
-        spline::SplineD<double, 3> spline2(ref_points2);
-        DrawCurve(images[i], spline1, 20, 450, 50);
-        DrawCurve(images[i], spline2, 20, 450, 50);
-        std::vector<std::vector<double>> points = spline1.Closest(spline2);
-        DrawPoints(images[i], points, spline1, spline2, 20, 450, 50, 0.2);
+        spline::SplineD<double, 3> sp1(ref_points1);
+        spline::SplineD<double, 3> sp2(ref_points2);
+        DrawCurve(images[i], sp1, 20, 450, 50);
+        DrawCurve(images[i], sp2, 20, 450, 50);
+        std::vector<std::vector<double>> points =
+            spline::Intersector<double, decltype(sp1), decltype(sp2)>(sp1, sp2).Closest();
+        DrawPoints(images[i], points, sp1, sp2, 20, 450, 50, 0.2);
     }
 }
 
@@ -158,12 +166,13 @@ void ClosestTwoSplinesEnds(std::vector<cv::Mat> &images) {
                                                      {13 + shift, 14}, {17 + shift, 17}};
         std::vector<std::vector<double>> ref_points2{{-2 - shift, 0}, {-6 - shift, 3}, {-9 - shift, 7}, {-12 - shift, 11},
                                                      {-16 - shift, 14}, {-20 - shift, 17}};
-        spline::SplineD<double, 3> spline1(ref_points1);
-        spline::SplineD<double, 3> spline2(ref_points2);
-        DrawCurve(images[i], spline1, 20, 450, 50);
-        DrawCurve(images[i], spline2, 20, 450, 50);
-        std::vector<std::vector<double>> points = spline1.Closest(spline2);
-        DrawPoints(images[i], points, spline1, spline2, 20, 450, 50, 0.2);
+        spline::SplineD<double, 3> sp1(ref_points1);
+        spline::SplineD<double, 3> sp2(ref_points2);
+        DrawCurve(images[i], sp1, 20, 450, 50);
+        DrawCurve(images[i], sp2, 20, 450, 50);
+        std::vector<std::vector<double>> points =
+            spline::Intersector<double, decltype(sp1), decltype(sp2)>(sp1, sp2).Closest();
+        DrawPoints(images[i], points, sp1, sp2, 20, 450, 50, 0.2);
     }
 }
 
@@ -172,13 +181,13 @@ void ClosestSplineEllipse(std::vector<cv::Mat> &images) {
         const double shift = i * 0.1;
         std::vector<std::vector<double>> ref_points{{-1 + shift, 0}, {3 + shift, 3}, {6 + shift, 7}, {9 + shift, 11},
                                                     {13 + shift, 14}, {17 + shift, 17}};
-        spline::SplineD<double, 3> spline(ref_points);
-        spline::Ellipse<double> ellipse({10, 2.5}, {-7.5 - shift, 5});
-        DrawCurve(images[i], spline, 20, 450, 50);
-        DrawCurve(images[i], ellipse, 20, 450, 50);
-        std::vector<std::vector<double>> points = spline.Closest(ellipse);
-        // std::cout << points.size() << std::endl;
-        DrawPoints(images[i], points, spline, ellipse, 20, 450, 50, 0.2);
+        spline::SplineD<double, 3> sp(ref_points);
+        spline::Ellipse<double> el({10, 2.5}, {-7.5 - shift, 5});
+        DrawCurve(images[i], sp, 20, 450, 50);
+        DrawCurve(images[i], el, 20, 450, 50);
+        std::vector<std::vector<double>> points =
+            spline::Intersector<double, decltype(el), decltype(sp)>(el, sp).Closest();
+        DrawPoints(images[i], points, el, sp, 20, 450, 50, 0.2);
     }
 }
 
@@ -196,12 +205,10 @@ int main() {
     }
 
     std::vector<std::pair<std::string, std::function<void(std::vector<cv::Mat> &)>>> names{
-        // {"intersect_touch", IntersectTwoSplinesTouch},
         {"intersect_multipoint", IntersectTwoSplinesMultipoint},
         {"intersect_ellipse", IntersectSplineEllipse},
         {"intersect_spirals", IntersectSpirals},
         {"closest", ClosestTwoSplines},
-        // {"closest_ends", ClosestTwoSplinesEnds},
         {"closest_ellipse", ClosestSplineEllipse}};
 
     for (const auto &name : names) {
@@ -213,7 +220,6 @@ int main() {
         name.second(images);
         WriteImages(images, (p/name.first).string());
     }
-
   return 0;
 }
 
