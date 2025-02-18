@@ -55,7 +55,7 @@ Documentation:
 doxygen html documentation is generated in docs/html
 
 Dependencies:
-* the library depends on Eigen (fetched by Cmake)
+* the library depends on Eigen (fetched by Cmake), Nvidia CUDA, OpenMP (optional)
 * tests depend on GoogleTest (fetched by Cmake)
 * examples depend on OpenCV (to run the executable the OpenCV libraries should be on the search path)
 * documentation building depends on Doxygen and GraphViz
