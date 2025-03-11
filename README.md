@@ -17,7 +17,7 @@ C++/CUDA library for manipulating 2D parametric B-splines.
 A high computation load example of a spline and an ellipse closest points finding:
 
 	                  lib_v2       lib_v3
-    RMSProp CPU	    ~ 3300 us **  ~ 2200 us **
+    RMSProp CPU	~ 3300 us **  ~ 2200 us **
     BruteForce CPU	~ 2600 us **  ~ 1100 us **
     BruteForce CUDA	~  790 us *** ~  460 us ***
 
