@@ -5,6 +5,7 @@
 #include "../src/SplineSolver.h"
 #include "../src/SearchInitializer.h"
 #include <cmath>
+#include "../src/ComplexFunctions.h"
 
 using namespace spline;
 
@@ -113,16 +114,14 @@ template <class Curve1, class Curve2>
 void CheckSearchInitializer(Curve1 &c1,
                             Curve2 &c2,
                             double ratio,
-                            size_t ref_size,
-                            const std::vector<std::vector<double>> &ref_points) {
+                            const std::vector<double> &ref_vals) {
     spline::SearchInitializer<double, Curve1, Curve2> si(c1, c2);
     auto results = si.GetSearchPoints(ratio);
-    EXPECT_EQ(results.size(), ref_size);
-    for (int i = 0; i < std::min(results.size(), ref_size); ++i) {
-        EXPECT_NEAR(results[i][0], ref_points[i][0],
-                   (Intersector<double, Curve1, Curve2>::EPSILON * std::abs(results[i][0])));
-        EXPECT_NEAR(results[i][1], ref_points[i][1],
-                   (Intersector<double, Curve1, Curve2>::EPSILON * std::abs(results[i][1])));
+    EXPECT_EQ(results.size(), ref_vals.size());
+    for (int i = 0; i < std::min(results.size(), ref_vals.size()); ++i) {
+        L2Norm<double, Curve1, Curve2> l2n(c1, c2);
+        EXPECT_NEAR(l2n(results[i][0], results[i][1])[0], ref_vals[i],
+                   (Intersector<double, Curve1, Curve2>::EPSILON * std::abs(ref_vals[i])));
     }
 }
 
@@ -131,96 +130,66 @@ TEST(SplineTest, SearchInitIntersect) {
     std::vector<std::vector<double>> ref_points2{{0, 0}, {-2, 3}, {0, 7}, {-2, 11}, {-0, 14}, {-2, 17}, {0, 20}};
     spline::SplineD<double, 3> spline1(ref_points1);
     spline::SplineD<double, 3> spline2(ref_points2);
-    std::vector<std::vector<double>> ref_ints1{{0.38576111341418, 0.38576111341418},
-                                               {0.77152222682835, 0.77152222682835},
-                                               {0.61721778146268, 0.61721778146268},
-                                               {0.23145666804851, 0.23145666804851},
-                                               {0.30860889073134, 0.30860889073134},
-                                               {1.0, 1.0},
-                                               {0.69437000414552, 0.69437000414552},
-                                               {0.69437000414552, 0.61721778146268},
-                                               {0.77152222682835, 0.69437000414552},
-                                               {0.30860889073134, 0.23145666804851},
-                                               {0.38576111341418, 0.30860889073134},
-                                               {0.30860889073134, 0.38576111341418},
-                                               {0.0, 0.077152222682835},
-                                               {0.077152222682835, 0.0},
-                                               {0.46291333609701, 0.38576111341418},
-                                               {1.0, 0.92582667219402},
-                                               {0.92582667219402, 1.0},
-                                               {0.46291333609701, 0.46291333609701},
-                                               {0.77152222682835, 0.84867444951119},
-                                              };
-    std::vector<std::vector<double>> ref_ints2{{0.38576111341418, 0.38576111341418},
-                                               {0.77152222682835, 0.77152222682835},
-                                               {0.61721778146268, 0.61721778146268},
-                                               {0.23145666804851, 0.23145666804851},
-                                               {0.30860889073134, 0.30860889073134},
-                                               {1.0, 1.0},
-                                               {0.69437000414552, 0.69437000414552},
-                                               {0.69437000414552, 0.61721778146268},
-                                               {0.77152222682835, 0.69437000414552},
-                                               {0.30860889073134, 0.23145666804851},
-                                               {0.30860889073134, 0.38576111341418},
-                                               {0.38576111341418, 0.30860889073134},
-                                               {0.077152222682835, 0.0},
-                                               {0.0, 0.077152222682835},
-                                               {0.46291333609701, 0.38576111341418},
-                                               {0.92582667219402, 1.0},
-                                               {1.0, 0.92582667219402},
-                                               {0.46291333609701, 0.46291333609701},
-                                               {0.84867444951119, 0.77152222682835},
-                                              };
+    std::vector<double> ref_vals{0.064161112985266,
+                                 0.23514960748908,
+                                 0.54505941390908,
+                                 0.78185731156511,
+                                 0.84455969161699,
+                                 1.0,
+                                 1.0,
+                                 1.0169565942594,
+                                 2.2258101830676,
+                                 2.2258101830676,
+                                 2.3060777517305,
+                                 2.3060777517305,
+                                 2.6367586788225,
+                                 2.6367586788225,
+                                 3.0354531420999,
+                                 3.0354531420999,
+                                 3.2856695555019,
+                                 3.2856695555019,
+                                 3.5787168593497,
+                                };
     CheckSearchInitializer(spline1, spline2,
-                           Intersector<double, spline::SplineD<double, 3>, spline::Ellipse<double>>::INTERSECT_SEARCH_GRID_RATIO,
-                           19, ref_ints1);
+                           Intersector<double,
+                                       spline::SplineD<double, 3>,
+                                       spline::SplineD<double, 3>>::INTERSECT_SEARCH_GRID_RATIO,
+                           ref_vals);
     CheckSearchInitializer(spline2, spline1,
-                           Intersector<double, spline::SplineD<double, 3>, spline::Ellipse<double>>::INTERSECT_SEARCH_GRID_RATIO,
-                           19, ref_ints2);
+                           Intersector<double,
+                                       spline::SplineD<double, 3>,
+                                       spline::SplineD<double, 3>>::INTERSECT_SEARCH_GRID_RATIO,
+                           ref_vals);
 }
 
 TEST(SplineTest, SearchInitClosest) {
     std::vector<std::vector<double>> ref_points{{-1, 0}, {3, 3}, {6, 7}, {9, 11}, {13, 14}, {17, 17}};
     spline::SplineD<double, 3> spline(ref_points);
     spline::Ellipse<double> ellipse({20, 5}, {-12.3, 10});
-    std::vector<std::vector<double>> ref_ints1{{0.51, 0.975},
-                                               {0.49, 0.9625},
-                                               {0.5, 0.975},
-                                               {0.52, 0.9875},
-                                               {0.48, 0.9625},
-                                               {0.46, 0.95},
-                                               {0.53, 0.9875},
-                                               {0.47, 0.95},
-                                               {0.51, 0.9875},
-                                               {0.54, 1.0},
-                                               {0.54, 0.0},
-                                               {0.53, 1.0},
-                                               {0.53, 0.0},
-                                               {0.5, 0.9625},
-                                               {0.52, 0.975},
-                                              };
-    std::vector<std::vector<double>> ref_ints2{{0.975, 0.51},
-                                               {0.9625, 0.49},
-                                               {0.975, 0.5},
-                                               {0.9875, 0.52},
-                                               {0.9625, 0.48},
-                                               {0.95, 0.46},
-                                               {0.9875, 0.53},
-                                               {0.95, 0.47},
-                                               {0.9875, 0.51},
-                                               {1.0, 0.54},
-                                               {0.0, 0.54},
-                                               {1.0, 0.53},
-                                               {0.0, 0.53},
-                                               {0.9625, 0.5},
-                                               {0.975, 0.52},
-                                              };
+    std::vector<double> ref_vals{0.016490084982884,
+                                 0.016801328967701,
+                                 0.018688252583091,
+                                 0.018736965140641,
+                                 0.024773205182818,
+                                 0.050978045923057,
+                                 0.056154030280996,
+                                 0.067170003206751,
+                                 0.10704445240542,
+                                 0.11230672222222,
+                                 0.11230672222222,
+                                 0.12254368836806,
+                                 0.12254368836806,
+                                 0.13516460656584,
+                                 0.13975536235957,
+                                };
     CheckSearchInitializer(spline, ellipse,
-                           Intersector<double, spline::SplineD<double, 3>, spline::Ellipse<double>>::CLOSEST_SEARCH_GRID_RATIO,
-                           15, ref_ints1);
+                           Intersector<double, spline::SplineD<double, 3>,
+                                               spline::Ellipse<double>>::CLOSEST_SEARCH_GRID_RATIO,
+                           ref_vals);
     CheckSearchInitializer(ellipse, spline,
-                           Intersector<double, spline::SplineD<double, 3>, spline::Ellipse<double>>::CLOSEST_SEARCH_GRID_RATIO,
-                           15, ref_ints2);
+                           Intersector<double, spline::SplineD<double, 3>,
+                                               spline::Ellipse<double>>::CLOSEST_SEARCH_GRID_RATIO,
+                           ref_vals);
 }
 
 template <class Curve1, class Curve2>
@@ -288,8 +257,8 @@ TEST(SplineTest, IntersectSplineEllipse) {
 template <class Curve1, class Curve2>
 void CheckPointsClosest(Curve1 &sp1,
                         Curve2 &sp2,
-                        const std::vector<std::vector<double>> & ref_close,
-                        const std::vector<std::vector<double>> &ref_close_values) {
+                        const std::vector<std::vector<double>> &ref_close,
+                        double ref_close_distance) {
     auto intor = Intersector<double, Curve1, Curve2>(sp1, sp2);
     auto ipoints = intor.Intersect();
     EXPECT_EQ(ipoints.size(), 0);
@@ -298,23 +267,50 @@ void CheckPointsClosest(Curve1 &sp1,
         intor.Closest(ClosestOptAlgorithm::BruteForce_cpu),
         intor.Closest(ClosestOptAlgorithm::BruteForce_cuda)
     };
+    cuda::std::array<double, 2> max_val{0, 0};
     for (const auto &p : cpoints) {
         EXPECT_EQ(p.size(), 1);
+        L2Norm<double, Curve1, Curve2> l2n(sp1, sp2);
         EXPECT_NEAR(p[0][0], ref_close[0][0],
-                    (2.2 * Intersector<double, Curve1, Curve2>::EPSILON * std::abs(p[0][0])));
+                    (2 * Intersector<double, Curve1, Curve2>::EPSILON));
         EXPECT_NEAR(p[0][1], ref_close[0][1],
-                    (2.2 * Intersector<double, Curve1, Curve2>::EPSILON * std::abs(p[0][1])));
-        auto cp1 = sp1(p[0][0]);
-        auto cp2 = sp2(p[0][1]);
-        EXPECT_NEAR(cp1[0], ref_close_values[0][0],
-                    (2.2 * Intersector<double, Curve1, Curve2>::EPSILON * std::abs(cp1[0])));
-        EXPECT_NEAR(cp1[1], ref_close_values[0][1],
-                    (2.2 * Intersector<double, Curve1, Curve2>::EPSILON * std::abs(cp1[1])));
-        EXPECT_NEAR(cp2[0], ref_close_values[1][0],
-                    (2.2 * Intersector<double, Curve1, Curve2>::EPSILON * std::abs(cp2[0])));
-        EXPECT_NEAR(cp2[1], ref_close_values[1][1],
-                    (2.2 * Intersector<double, Curve1, Curve2>::EPSILON * std::abs(cp2[1])));
+                    (2 * Intersector<double, Curve1, Curve2>::EPSILON));
+        auto d = l2n(p[0][0], p[0][1])[0];
+        auto dref = l2n(ref_close[0][0], ref_close[0][1])[0];
+        EXPECT_NEAR(d, dref, (Intersector<double, Curve1, Curve2>::EPSILON * d));
+        auto dd = std::abs(d - dref);
+        if (dd != 0) {
+            auto der = l2n.Derivative(p[0][0], p[0][1]);
+            EXPECT_NEAR(p[0][0], ref_close[0][0],
+                        (10 * dd / std::max(std::abs(der[0]), compare_precision * compare_precision)));
+            EXPECT_NEAR(p[0][1], ref_close[0][1],
+                        (10 * dd / std::max(std::abs(der[1]), compare_precision * compare_precision)));
+        }
     }
+}
+
+template <class Curve1, class Curve2>
+int CheckAlgorithmClosest(Curve1 &sp1,
+                          Curve2 &sp2,
+                          spline::ClosestOptAlgorithm alg) {
+    auto intor = Intersector<double, Curve1, Curve2>(sp1, sp2);
+    auto ipoints = intor.Intersect();
+    EXPECT_EQ(ipoints.size(), 0);
+    auto p0 = intor.Closest(ClosestOptAlgorithm::RMSProp_cpu, 8e-11);
+    auto p1 = intor.Closest(alg);
+    L2Norm<double, Curve1, Curve2> l2n(sp1, sp2);
+    auto d0 = l2n(p0[0][0], p0[0][1])[0];
+    auto d1 = l2n(p1[0][0], p1[0][1])[0];
+    auto delta = std::abs(d0 - d1);
+    auto dd = delta;
+    if (dd != 0) {
+        auto der = l2n.Derivative(p0[0][0], p0[0][1]);
+        EXPECT_NEAR(p0[0][0], p1[0][0],
+                    (dd / std::max(std::abs(der[0]), compare_precision * compare_precision)));
+        EXPECT_NEAR(p0[0][1], p1[0][1],
+                    (dd / std::max(std::abs(der[1]), compare_precision * compare_precision)));
+    }
+    return 0;
 }
 
 TEST(SplineTest, ClosestTwoSplines) {
@@ -324,12 +320,9 @@ TEST(SplineTest, ClosestTwoSplines) {
     spline::SplineD<double, 3> spline2(ref_points2);
     std::vector<std::vector<double>> ref_close0{{0.65403686511313253, 0.94596313488686712}};
     std::vector<std::vector<double>> ref_close1{{0.94596313488686712, 0.65403686511313253}};
-    std::vector<std::vector<double>> ref_close_val0{{9.9935690192598834, 11.897721259699754},
-                                                    {9.0064309807400917, 13.102278740300225}};
-    std::vector<std::vector<double>> ref_close_val1{{9.0064309807400917, 13.102278740300225},
-                                                    {9.9935690192598834, 11.897721259699754}};
-    CheckPointsClosest(spline1, spline2, ref_close0, ref_close_val0);
-    CheckPointsClosest(spline2, spline1, ref_close1, ref_close_val1);
+    double ref_close_distance = 2.4254002311633;
+    CheckPointsClosest(spline1, spline2, ref_close0, ref_close_distance);
+    CheckPointsClosest(spline2, spline1, ref_close1, ref_close_distance);
 }
 
 TEST(SplineTest, ClosestTwoSplinesEnds) {
@@ -338,10 +331,9 @@ TEST(SplineTest, ClosestTwoSplinesEnds) {
     spline::SplineD<double, 3> spline1(ref_points1);
     spline::SplineD<double, 3> spline2(ref_points2);
     std::vector<std::vector<double>> ref_close{{0, 0}};
-    std::vector<std::vector<double>> ref_close_val0{{-1, 0}, {-2, 0}};
-    std::vector<std::vector<double>> ref_close_val1{{-2, 0}, {-1, 0}};
-    CheckPointsClosest(spline1, spline2, ref_close, ref_close_val0);
-    CheckPointsClosest(spline2, spline1, ref_close, ref_close_val1);
+    double ref_close_distance = 1.0;
+    CheckPointsClosest(spline1, spline2, ref_close, ref_close_distance);
+    CheckPointsClosest(spline2, spline1, ref_close, ref_close_distance);
 }
 
 TEST(SplineTest, ClosestSplineEllipse) {
@@ -350,12 +342,9 @@ TEST(SplineTest, ClosestSplineEllipse) {
     spline::Ellipse<double> ellipse({20, 5}, {-15, 10});
     std::vector<std::vector<double>> ref_close0{{0.4438285236656746, 0.97372054218841175}};
     std::vector<std::vector<double>> ref_close1{{0.97372054218841175, 0.4438285236656746}};
-    std::vector<std::vector<double>> ref_close_val0{{6.610886178837724, 7.9231121494608878},
-                                                    {4.7279770223832038, 9.178152895746404}};
-    std::vector<std::vector<double>> ref_close_val1{{4.7279770223832038, 9.178152895746404},
-                                                    {6.610886178837724, 7.9231121494608878}};
-    CheckPointsClosest(spline, ellipse, ref_close0, ref_close_val0);
-    CheckPointsClosest(ellipse, spline, ref_close1, ref_close_val1);
+    double ref_close_distance = 5.1204741662972;
+    CheckPointsClosest(spline, ellipse, ref_close0, ref_close_distance);
+    CheckPointsClosest(ellipse, spline, ref_close1, ref_close_distance);
 }
 
 TEST(SplineTest, ClosestSplineEllipseClose) {
@@ -364,12 +353,24 @@ TEST(SplineTest, ClosestSplineEllipseClose) {
     spline::Ellipse<double> ellipse({20, 5}, {-12.3, 10});
     std::vector<std::vector<double>> ref_close0{{0.50017022234140029, 0.9716406504596623}};
     std::vector<std::vector<double>> ref_close1{{0.9716406504596623, 0.50017022234140029}};
-    std::vector<std::vector<double>> ref_close_val0{{7.4149944838495108, 9.0909632980994992},
-                                                    {7.3833329545030324, 9.1137719042842686}};
-    std::vector<std::vector<double>> ref_close_val1{{7.3833329545030324, 9.1137719042842686},
-                                                    {7.4149944838495108, 9.0909632980994992}};
-    CheckPointsClosest(spline, ellipse, ref_close0, ref_close_val0);
-    CheckPointsClosest(ellipse, spline, ref_close1, ref_close_val1);
+    double ref_close_distance = 0.0015226849566498;
+    CheckPointsClosest(spline, ellipse, ref_close0, ref_close_distance);
+    CheckPointsClosest(ellipse, spline, ref_close1, ref_close_distance);
+}
+
+TEST(SplineTest, ClosestSplineEllipseMove) {
+    int errors = 0;
+    for (size_t i = 0; i < 40; ++i) {
+        const double shift = i * 0.1;
+        std::vector<std::vector<double>> ref_points{{-1 + shift, 0}, {3 + shift, 3}, {6 + shift, 7}, {9 + shift, 11},
+                                                    {13 + shift, 14}, {17 + shift, 17}};
+        spline::SplineD<double, 3> sp(ref_points);
+        spline::Ellipse<double> el({10, 2.5}, {-7.5 - shift, 5});
+        errors += CheckAlgorithmClosest(el, sp, ClosestOptAlgorithm::BruteForce_cpu);
+        errors += CheckAlgorithmClosest(sp, el, ClosestOptAlgorithm::BruteForce_cpu);
+        errors += CheckAlgorithmClosest(el, sp, ClosestOptAlgorithm::BruteForce_cuda);
+        errors += CheckAlgorithmClosest(sp, el, ClosestOptAlgorithm::BruteForce_cuda);
+    }
 }
 
 constexpr size_t MEASURE_REPEAT_COUNT = 10;

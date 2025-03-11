@@ -3,6 +3,7 @@
 #include <map>
 #include <thread>
 #include <cmath>
+#include <algorithm>
 
 namespace spline {
 
@@ -31,17 +32,23 @@ template <class T, class Curve, class Other>
 std::vector<std::vector<T> >
 SearchInitializer<T, Curve, Other>::GetSearchPoints(T search_ratio, T select_ratio) const {
     auto sg = GetSearchGrid(search_ratio);
-    std::map<T, std::vector<T>> f_sorted;
+    std::vector<std::pair<T, std::vector<T>>> f_sorted;
     L2Norm<T, Curve, Other> l2n({curve0_, curve1_});
     for (const auto &p : sg) {
-        f_sorted[l2n(p[0], p[1])[0]] = p;
+        f_sorted.push_back({l2n(p[0], p[1])[0], p});
     }
     size_t num_tries = (select_ratio == -1 ? f_sorted.size() :
                         (T)1 / (std::min(curve0_.GetMinDParam(),
                                          curve1_.GetMinDParam())) * select_ratio);
+    std::partial_sort(f_sorted.begin(), f_sorted.begin() + num_tries, f_sorted.end(),
+                      [](const std::pair<T, std::vector<T>> &lhs,
+                         const std::pair<T, std::vector<T>> &rhs) {
+                            return lhs.first < rhs.first;
+                        });
+
     std::vector<std::vector<T>> results(num_tries, {(T)0, (T)0});
-    for (auto [i, it] = std::tuple{0, f_sorted.begin()}; i < num_tries && it != f_sorted.end(); ++it, ++i) {
-        results[i] = it->second;
+    for (size_t i = 0; i < num_tries; ++i) {
+        results[i] = f_sorted[i].second;
     }
     return results;
 }

@@ -93,7 +93,7 @@ protected:
     const T epsilon_, power_step_;
     const size_t power_split_;
 
-    __host__ __device__ void OptimizeStep(T &arg0, T &arg1, T &delta0, T &delta1);
+    __host__ __device__ bool OptimizeStep(T &arg0, T &arg1, T &delta0, T &delta1, cuda::std::array<T, 4> &values);
 };
 
 } // namespace spline

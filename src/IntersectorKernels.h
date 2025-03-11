@@ -9,6 +9,7 @@ namespace spline {
 
 template <class T, class Curve0, class Curve1>
 std::vector<std::vector<T>>  CudaOptimize(Block<T> &results,
+                                          Block<T> &deltas,
                                           Curve0 &c0,
                                           Curve1 &c1,
                                           size_t max_iters,
@@ -19,6 +20,7 @@ std::vector<std::vector<T>>  CudaOptimize(Block<T> &results,
                                          );
 
 extern template std::vector<std::vector<double>> CudaOptimize<double, SplineD<double, 3>, SplineD<double, 3>>(
+    Block<double> &,
     Block<double> &,
     SplineD<double, 3> &,
     SplineD<double, 3> &,
@@ -31,6 +33,7 @@ extern template std::vector<std::vector<double>> CudaOptimize<double, SplineD<do
 
 extern template std::vector<std::vector<double>> CudaOptimize<double, Ellipse<double>, SplineD<double, 3>>(
     Block<double> &,
+    Block<double> &,
     Ellipse<double> &,
     SplineD<double, 3> &,
     size_t,
@@ -42,6 +45,7 @@ extern template std::vector<std::vector<double>> CudaOptimize<double, Ellipse<do
 
 extern template std::vector<std::vector<double>> CudaOptimize<double, SplineD<double, 3>, Ellipse<double>>(
     Block<double> &,
+    Block<double> &,
     SplineD<double, 3> &,
     Ellipse<double> &,
     size_t,
@@ -52,6 +56,7 @@ extern template std::vector<std::vector<double>> CudaOptimize<double, SplineD<do
    );
 
 extern template std::vector<std::vector<double>> CudaOptimize<double, Ellipse<double>, Ellipse<double>>(
+    Block<double> &,
     Block<double> &,
     Ellipse<double> &,
     Ellipse<double> &,

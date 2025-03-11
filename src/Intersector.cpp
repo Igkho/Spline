@@ -8,6 +8,7 @@
 #include <set>
 #include <map>
 #include <thread>
+#include <algorithm>
 
 namespace spline {
 
@@ -76,6 +77,7 @@ Intersector<T, Curve0, Curve1>::Closest(ClosestOptAlgorithm alg,
                                                SearchInitializer<T, Curve0, Curve1>::MAX_DPARAM
                                               );
         results = CudaOptimize<T, Curve0, Curve1>(results_cuda_,
+                                                  deltas_,
                                                   curve0_,
                                                   curve1_,
                                                   max_iters,
@@ -107,22 +109,24 @@ Intersector<T, Curve0, Curve1>::Closest(ClosestOptAlgorithm alg,
     results.push_back({(T)1, (T)1});
 
     // Sort the argument pairs by calculated distance
-    std::map<T, std::vector<T>> f_sorted;
+    std::vector<std::pair<T, std::vector<T>>> f_sorted;
     L2Norm<T, Curve0, Curve1> l2n(curve0_, curve1_);
     for (const auto &p : results) {
-        f_sorted[l2n(p[0], p[1])[0]] = p;
+        f_sorted.push_back({l2n(p[0], p[1])[0], p});
     }
+    std::sort(f_sorted.begin(), f_sorted.end(), [](const std::pair<T, std::vector<T>> &lhs,
+                                                   const std::pair<T, std::vector<T>> &rhs) {
+                                                    return lhs.first < rhs.first;
+                                                });
     T min_dist = f_sorted.begin()->first;
     std::vector<T> sum(2, (T)0);
     size_t count = 0;
-
+    auto min_p = f_sorted.begin()->second;
     // Calculate the average of successful attempts
     for (const auto [dist, coords] : f_sorted) {
         if (std::abs(min_dist - dist) > epsilon * min_dist) {
             break;
         }
-        auto f0 = curve0_(coords[0]);
-        auto f1 = curve1_(coords[1]);
         sum[0] += coords[0];
         sum[1] += coords[1];
         count++;

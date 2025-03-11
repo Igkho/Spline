@@ -247,21 +247,23 @@ __device__ T CalcArg(const T &arg, const T &delta, int idx, int power_split) {
 
 template <class T>
 __global__ void OptimizeBruteForceKernel(double * __restrict__ results,
+                                         double * __restrict__ deltas,
                                          const CurveCuda<T> * __restrict__ c0,
                                          const CurveCuda<T> * __restrict__ c1,
                                          int power_split,
-                                         T delta0,
-                                         T delta1,
+                                         int power_step,
                                          int dim,
                                          int total_count
                                         ) {
-    __shared__ T dists[128];
-    __shared__ int sidcs[128];
+    __shared__ T dists[128], dists2[128];
+    __shared__ int sidcs[128], sidcs2[128];
     int idx = threadIdx.x + blockDim.x * blockIdx.x;
     if (idx < total_count) {
         int ridx = blockIdx.x;
         T arg0 = results[ridx * dim];
         T arg1 = results[ridx * dim + 1];
+        T delta0 = deltas[ridx * dim];
+        T delta1 = deltas[ridx * dim + 1];
         int split_idx = threadIdx.x;
         if (split_idx < power_split * power_split) {
             int i = split_idx / power_split;
@@ -279,6 +281,7 @@ __global__ void OptimizeBruteForceKernel(double * __restrict__ results,
             df = f0[1] - f1[1];
             dists[split_idx] += df * df;
             sidcs[split_idx] = split_idx;
+            dists2[split_idx] = dists[split_idx];
 
             for (int i = 0; i < 7; ++i) {
                 int shift = (int)1 << i;
@@ -286,20 +289,64 @@ __global__ void OptimizeBruteForceKernel(double * __restrict__ results,
                 int other_idx = split_idx + shift;
                 __syncthreads();
                 if ((split_idx & mask) == 0 &&
-                    other_idx < power_split * power_split &&
-                    dists[other_idx] <= dists[split_idx]) {
+                    other_idx < power_split * power_split) {
+                    if (dists[other_idx] <= dists[split_idx]) {
+                        if (i > 0) {
+                            if (dists2[other_idx] <= dists[split_idx]) {
+                                dists2[split_idx] = dists2[other_idx];
+                                sidcs2[split_idx] = sidcs2[other_idx];
+                            } else {
+                                dists2[split_idx] = dists[split_idx];
+                                sidcs2[split_idx] = sidcs[split_idx];
+                            }
+                        } else {
+                            dists2[split_idx] = dists[split_idx];
+                            sidcs2[split_idx] = sidcs[split_idx];
+                        }
                         dists[split_idx] = dists[other_idx];
                         sidcs[split_idx] = sidcs[other_idx];
+                    } else {
+                        if (i > 0) {
+                            if (dists[other_idx] <= dists2[split_idx]) {
+                                dists2[split_idx] = dists[other_idx];
+                                sidcs2[split_idx] = sidcs[other_idx];
+                            }
+                        } else {
+                            dists2[split_idx] = dists[other_idx];
+                            sidcs2[split_idx] = sidcs[other_idx];
+                        }
+                    }
                 }
             }
             __syncthreads();
             if (split_idx == 0) {
                 int i = sidcs[0] / power_split;
                 int j = sidcs[0] - i * power_split;
-                results[ridx * dim] = CalcArg(arg0, delta0, i, power_split);
-                results[ridx * dim + 1] = CalcArg(arg1, delta1, j, power_split);
+                T arg_new0 = CalcArg(arg0, delta0, i, power_split);
+                T arg_new1 = CalcArg(arg1, delta1, j, power_split);
+                results[ridx * dim] = arg_new0;
+                results[ridx * dim + 1] = arg_new1;
+                i = sidcs2[0] / power_split;
+                j = sidcs2[0] - i * power_split;
+                T d0 = std::abs(arg_new0 - CalcArg(arg0, delta0, i, power_split));
+                T d1 = std::abs(arg_new1 - CalcArg(arg1, delta1, j, power_split));
+                deltas[ridx * dim] = std::max(d0, power_step * delta0 / power_split);
+                deltas[ridx * dim + 1] = std::max(d1, power_step * delta1 / power_split);
             }
         }
+    }
+}
+
+__global__ void FillDeltas(double * __restrict__ deltas,
+                           double delta0,
+                           double delta1,
+                           int dim,
+                           int total_count
+                          ) {
+    int idx = threadIdx.x + blockDim.x * blockIdx.x;
+    if (idx < total_count) {
+        deltas[idx * dim] = delta0;
+        deltas[idx * dim + 1] = delta1;
     }
 }
 
@@ -307,6 +354,7 @@ __global__ void OptimizeBruteForceKernel(double * __restrict__ results,
 
 template <class T, class Curve0, class Curve1>
 std::vector<std::vector<T>> CudaOptimize(Block <T> &results_cuda,
+                                         Block <T> &deltas,
                                          Curve0 &c0,
                                          Curve1 &c1,
                                          size_t max_iters,
@@ -322,38 +370,40 @@ std::vector<std::vector<T>> CudaOptimize(Block <T> &results_cuda,
     c0.FillCudaBuffer();
     c1.FillCudaBuffer();
     if (power_split > 1 && power_step > (T)1) {
+        deltas.resize(results_cuda.size());
         T delta0 = c0.GetMinDParam() * ratio;
         T delta1 = c1.GetMinDParam() * ratio;
-        size_t float_iters_count = std::ceil(std::log((T)1e3) / std::log(power_step));
+        KernelGrid grid_deltas(deltas.size() / 2);
+        FillDeltas<<<grid_deltas.gsize(), grid_deltas.bsize()>>>(deltas.data(),
+                                                                 delta0,
+                                                                 delta1,
+                                                                 2,
+                                                                 deltas.size() / 2
+                                                                );
+        size_t float_iters_count = 4; //std::ceil(std::log((T)10) / std::log(power_step));
         size_t iters_count = std::ceil(std::log((T)1.0/epsilon) / std::log(power_step));
         KernelGrid grid(results_cuda.size() * 64, 128);
         for (size_t i = 0; i < float_iters_count; ++i) {
             OptimizeBruteForceKernel<float><<<grid.gsize(), grid.bsize()>>>(results_cuda.data(),
+                                                                            deltas.data(),
                                                                             c0.GetCudaBufferFloat(),
                                                                             c1.GetCudaBufferFloat(),
                                                                             power_split,
-                                                                            delta0,
-                                                                            delta1,
+                                                                            power_step,
                                                                             dim,
                                                                             results_cuda.size() * 64
                                                                            );
-            delta0 /= power_step;
-            delta1 /= power_step;
         }
-        delta0 *= power_step;
-        delta1 *= power_step;
         for (size_t i = 0; i < iters_count - float_iters_count + 1; ++i) {
             OptimizeBruteForceKernel<T><<<grid.gsize(), grid.bsize()>>>(results_cuda.data(),
+                                                                        deltas.data(),
                                                                         c0.GetCudaBuffer(),
                                                                         c1.GetCudaBuffer(),
                                                                         power_split,
-                                                                        delta0,
-                                                                        delta1,
+                                                                        power_step,
                                                                         dim,
                                                                         results_cuda.size() * 64
                                                                        );
-            delta0 /= power_step;
-            delta1 /= power_step;
         }
     }
     auto unflatten = [](const std::vector<T> &v2d, size_t dim) -> std::vector<std::vector<T>>{
@@ -370,6 +420,7 @@ std::vector<std::vector<T>> CudaOptimize(Block <T> &results_cuda,
 
 template std::vector<std::vector<double>> CudaOptimize<double, SplineD<double, 3>, SplineD<double, 3>>(
     Block<double> &,
+    Block<double> &,
     SplineD<double, 3> &,
     SplineD<double, 3> &,
     size_t,
@@ -380,6 +431,7 @@ template std::vector<std::vector<double>> CudaOptimize<double, SplineD<double, 3
    );
 
 template std::vector<std::vector<double>> CudaOptimize<double, Ellipse<double>, SplineD<double, 3>>(
+    Block<double> &,
     Block<double> &,
     Ellipse<double> &,
     SplineD<double, 3> &,
@@ -392,6 +444,7 @@ template std::vector<std::vector<double>> CudaOptimize<double, Ellipse<double>, 
 
 template std::vector<std::vector<double>> CudaOptimize<double, SplineD<double, 3>, Ellipse<double>>(
     Block<double> &,
+    Block<double> &,
     SplineD<double, 3> &,
     Ellipse<double> &,
     size_t,
@@ -402,6 +455,7 @@ template std::vector<std::vector<double>> CudaOptimize<double, SplineD<double, 3
    );
 
 template std::vector<std::vector<double>> CudaOptimize<double, Ellipse<double>, Ellipse<double>>(
+    Block<double> &,
     Block<double> &,
     Ellipse<double> &,
     Ellipse<double> &,

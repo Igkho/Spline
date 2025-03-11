@@ -1,4 +1,5 @@
 #include "Optimizers.h"
+#include <iomanip>
 
 namespace spline {
 
@@ -113,17 +114,23 @@ void BruteForceOptimizer<T, Curve0, Curve1>::Optimize(T &arg0, T &arg1, T ratio)
     auto delta0 = this->func0_.GetMinDParam() * ratio;
     auto delta1 = this->func1_.GetMinDParam() * ratio;
     size_t max_iters = std::ceil(std::log((T)1.0/(epsilon_)) / std::log((T)power_step_));
+    auto v0 = this->func0_(arg0);
+    auto v1 = this->func1_(arg1);
+    cuda::std::array<T, 4> values{v0[0], v0[1], v1[0], v1[1]};
     for (size_t i = 0; i < max_iters; ++i) {
-        OptimizeStep(arg0, arg1, delta0, delta1);
+        OptimizeStep(arg0, arg1, delta0, delta1, values);
     }
 }
 
 template <class T, class Curve0, class Curve1>
-void BruteForceOptimizer<T, Curve0, Curve1>::OptimizeStep(T &arg0,
+bool BruteForceOptimizer<T, Curve0, Curve1>::OptimizeStep(T &arg0,
                                                           T &arg1,
                                                           T &delta0,
-                                                          T &delta1) {
-    T min0 = arg0, min1 = arg1, min_val = l2n_(arg0, arg1)[0];
+                                                          T &delta1,
+                                                          cuda::std::array<T, 4> &values
+                                                         ) {
+    T min00 = arg0, min10 = arg1, min_val0 = l2n_(arg0, arg1)[0];
+    T min01 = arg0, min11 = arg1, min_val1 = min_val0;
     for (size_t i = 0; i <= power_split_; ++i) {
         for (size_t j = 0; j <= power_split_; ++j) {
             T argn0 = arg0 - delta0 + (T)2 * i * delta0 / power_split_;
@@ -131,17 +138,26 @@ void BruteForceOptimizer<T, Curve0, Curve1>::OptimizeStep(T &arg0,
             T argn1 = arg1 - delta1 + (T)2 * j * delta1 / power_split_;
             argn1 = std::max((T)0, std::min((T)1, argn1));
             T val = l2n_(argn0, argn1)[0];
-            if (val < min_val) {
-                min_val = val;
-                min0 = argn0;
-                min1 = argn1;
+            if (val < min_val0) {
+                min_val0 = val;
+                min00 = argn0;
+                min10 = argn1;
+            } else if (val < min_val1) {
+                min_val1 = val;
+                min01 = argn0;
+                min11 = argn1;
             }
         }
     }
-    delta0 /= power_step_;
-    delta1 /= power_step_;
-    arg0 = min0;
-    arg1 = min1;
+    arg0 = min00;
+    arg1 = min10;
+    double delta0_new = std::max(std::max(std::abs(arg0 - min00), std::abs(arg0 - min01)),
+                                 power_step_ * delta0 / power_split_);
+    double delta1_new = std::max(std::max(std::abs(arg1 - min10), std::abs(arg1 - min11)),
+                                 power_step_ * delta1 / power_split_);
+    delta0 = delta0_new;
+    delta1 = delta1_new;
+    return false;
 }
 
 template class NROptimizer<double, SplineD<double, 3>, SplineD<double, 3>>;

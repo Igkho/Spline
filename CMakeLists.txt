@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19...3.31)
 
 project(Spline
-        VERSION 2.0
+        VERSION 3.0
         LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)

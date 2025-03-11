@@ -28,9 +28,9 @@ public:
     //! A default ratio for init search grid calculation (finding closest points)
     static constexpr T CLOSEST_SEARCH_GRID_RATIO = 0.05;
     //! A default power split value for brute force algorithm (finding closest points)
-    static constexpr T CLOSEST_BRUTE_FORCE_POWER_SPLIT = 11;
+    static constexpr T CLOSEST_BRUTE_FORCE_POWER_SPLIT = 10.0;
     //! A default power step for brute force algorithm (finding closest points)
-    static constexpr T CLOSEST_BRUTE_FORCE_POWER_STEP = 1.51;
+    static constexpr T CLOSEST_BRUTE_FORCE_POWER_STEP = 3.0;
 
     //! A constructor from two curves
     Intersector(Curve0 &curve0, Curve1 &curve1) :
@@ -72,6 +72,8 @@ private:
     Curve1 &curve1_;
     //! A cuda buffer for optimization results data
     Block<T> results_cuda_;
+    //! A cuda buffer for deltas data
+    Block<T> deltas_;
 };
 
 } //! namespace spline
